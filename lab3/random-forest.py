@@ -1,47 +1,47 @@
-from fastai.imports import *
+import numpy as np
+import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, classification_report, roc_auc_score
+import category_encoders as ce
+from sklearn.preprocessing import label_binarize
 
-# Load data
-df = pd.read_csv(path/'train.csv')
-tst_df = pd.read_csv(path/'test.csv')
+# Load the data
+data = pd.read_csv('car_evaluation.csv')
 
-# Data preprocessing
-def proc_data(df):
-    df['Fare'] = df.Fare.fillna(0)
-    df.fillna(modes, inplace=True)
-    df['LogFare'] = np.log1p(df['Fare'])
-    df['Embarked'] = pd.Categorical(df.Embarked)
-    df['Sex'] = pd.Categorical(df.Sex)
+# Data Preprocessing
+# Encode categorical variables
+encoder = ce.OrdinalEncoder(cols=['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety'])
+data_encoded = encoder.fit_transform(data)
 
-proc_data(df)
-proc_data(tst_df)
+# Separate features and target variable
+X = data_encoded.drop('decision', axis=1)
+y = data_encoded['decision']
 
-# Define variables
-cats = ["Sex", "Embarked"]
-conts = ['Age', 'SibSp', 'Parch', 'LogFare', "Pclass"]
-dep = "Survived"
+# Splitting the dataset
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-# Split data into training and validation sets
-random.seed(42)
-trn_df, val_df = train_test_split(df, test_size=0.25)
-trn_df[cats] = trn_df[cats].apply(lambda x: x.cat.codes)
-val_df[cats] = val_df[cats].apply(lambda x: x.cat.codes)
+# Building the Random Forest Model
+rf_model = RandomForestClassifier(random_state=42)
+rf_model.fit(X_train, y_train)
 
-# Create independent and dependent variables
-def xs_y(df):
-    xs = df[cats + conts].copy()
-    return xs, df[dep] if dep in df else None
+# Model Evaluation
+# Confusion Matrix
+y_pred = rf_model.predict(X_test)
+confusion_matrix_result = confusion_matrix(y_test, y_pred)
 
-trn_xs, trn_y = xs_y(trn_df)
-val_xs, val_y = xs_y(val_df)
+# Classification Report
+classification_report_result = classification_report(y_test, y_pred)
 
-# Create and train random forest model
-rf = RandomForestClassifier(100, min_samples_leaf=5)
-rf.fit(trn_xs, trn_y)
+# AUC Score for Multi-Class
+# Binarize the output classes for AUC calculation
+y_test_binarized = label_binarize(y_test, classes=np.unique(y))
+y_pred_proba = rf_model.predict_proba(X_test)
 
-# Make predictions on the validation set
-predictions = rf.predict(val_xs)
+# Compute AUC score using One-vs-Rest approach
+auc_score = roc_auc_score(y_test_binarized, y_pred_proba, multi_class='ovr')
 
-# Evaluate the model
-mean_absolute_error(val_y, predictions)
+# Display Results
+print("Confusion Matrix:\n", confusion_matrix_result)
+print("\nClassification Report:\n", classification_report_result)
+print("\nAUC Score:", auc_score)
